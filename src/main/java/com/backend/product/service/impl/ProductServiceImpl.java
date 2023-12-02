@@ -20,6 +20,8 @@ public class ProductServiceImpl implements ProductService {
 	@Autowired
 	private ProductRepo productRepo;
 
+	private Product product;
+
 	/**
 	 * Inserts a new product into the repository.
 	 *
@@ -30,6 +32,7 @@ public class ProductServiceImpl implements ProductService {
 	
 	public Product insert(Product product) {
 		try {
+			
 			return productRepo.save(product);
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -63,6 +66,10 @@ public class ProductServiceImpl implements ProductService {
 	
 	public List<Product> getAllProduct() {
 		try {
+			 product = new Product();
+			// Round off the unit price based on the specified criteria
+            Double roundedUnitPrice = roundOffUnitPrice(product.getUnitPrice());
+            product.setUnitPrice(roundedUnitPrice);
 			return productRepo.findAll();
 		} catch (Exception e) {
 			logger.error("Error in Getting AllProduct", e);
@@ -98,6 +105,9 @@ public class ProductServiceImpl implements ProductService {
 	
 	public Product update(Product product) {
 		try {
+			 // Round off the unit price based on the specified criteria
+            Double roundedUnitPrice = roundOffUnitPrice(product.getUnitPrice());
+            product.setUnitPrice(roundedUnitPrice);
 			Integer productId = product.getId();
 			if (!productRepo.existsById(productId)) {
 				logger.error("Product with ID {} not found for update", productId);
@@ -109,6 +119,27 @@ public class ProductServiceImpl implements ProductService {
 			return null;
 		}
 	}
+	
+	 private static Double roundOffUnitPrice(Double unitPrice) {
+	        if (unitPrice != null) {
+	            if (unitPrice < 1.0) {
+	                // If unit price is less than 1 rupee, round up to 1 using Math.ceil
+	                return 1.0;
+	            } else {
+	                // If unit price is greater than or equal to 1 rupee, round off to the nearest whole number
+	                double decimalPart = unitPrice - Math.floor(unitPrice);
+	                if (decimalPart < 0.5) {
+	                    // If the decimal part is less than 0.5, round down using Math.floor
+	                    return Math.floor(unitPrice);
+	                } else {
+	                    // If the decimal part is greater than or equal to 0.5, round up using Math.ceil
+	                    return Math.ceil(unitPrice);
+	                }
+	            }
+	        }
+	        // If unit price is null, return null
+	        return null;
+	    }
 
 	/**
 	 * Search an existing product and their quantity in the repository.
@@ -123,20 +154,48 @@ public class ProductServiceImpl implements ProductService {
 		try {
 			List<Product> products;
 
-			if (name != null && unitsInStock != null) {
-				products = productRepo.findByNameContainingAndUnitsInStockGreaterThan(name, unitsInStock);
-			} else if (name != null) {
-				products = productRepo.findByNameContaining(name);
-			} else if (unitsInStock != null) {
-				products = productRepo.findByUnitsInStockGreaterThan(unitsInStock);
-			} else {
-				products = productRepo.findAll();
-			}
+	        // Add switch case for filtering based on categories
+	        switch (getFilterCategory(name, unitsInStock)) {
+	            case NAME_AND_UNITS_IN_STOCK:
+	                products = productRepo.findByNameContainingAndUnitsInStockGreaterThan(name, unitsInStock);
+	                break;
+	            case NAME_ONLY:
+	                products = productRepo.findByNameContaining(name);
+	                break;
+	            case UNITS_IN_STOCK_ONLY:
+	                products = productRepo.findByUnitsInStockGreaterThan(unitsInStock);
+	                break;
+	            default:
+	                products = productRepo.findAll();
+	                break;
+	        }
 
-			return products;
-		} catch (Exception e) {
-			e.printStackTrace();
-			return null;
-		}
+	        return products;
+	    } catch (Exception e) {
+	        logger.error("Error searching products", e);
+	        return null;
+	    }
+	}
+
+	// Define an enum for filter categories
+	private enum FilterCategory {
+	    NAME_AND_UNITS_IN_STOCK,
+	    NAME_ONLY,
+	    UNITS_IN_STOCK_ONLY,
+	    NONE
+	}
+
+	// Helper method to determine the filter category
+	private FilterCategory getFilterCategory(String name, Integer unitsInStock) {
+	    if (name != null && unitsInStock != null) {
+	        return FilterCategory.NAME_AND_UNITS_IN_STOCK;
+	    } else if (name != null) {
+	        return FilterCategory.NAME_ONLY;
+	    } else if (unitsInStock != null) {
+	        return FilterCategory.UNITS_IN_STOCK_ONLY;
+	    } else {
+	        return FilterCategory.NONE;
+	    }
+
 	}
 }
